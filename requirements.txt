@@ -1,0 +1,8 @@
+streamlit
+pandas
+numpy
+scikit-learn
+easyocr
+fuzzywuzzy
+python-docx
+pyttsx3
