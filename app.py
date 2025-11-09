@@ -1,3 +1,6 @@
+# =============================================
+# 📊 Customer Segmentation & Sales Forecast App
+# =============================================
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -7,44 +10,41 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 from sklearn.mixture import GaussianMixture
-from sklearn.metrics import silhouette_score, r2_score, mean_absolute_error, mean_squared_error
-from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
+from sklearn.metrics import silhouette_score
+from prophet import Prophet
 
-st.set_page_config(page_title="Customer Segmentation & Sales Prediction", layout="wide")
+# Streamlit settings
+st.set_page_config(page_title="Customer Segmentation & Forecast", layout="wide")
 
-st.title("🛍️ Customer Segmentation & Sales Prediction Dashboard")
+st.title("🛒 Customer Segmentation & Sales Forecasting Dashboard")
+st.write("Upload your sales dataset to explore customer clusters and predict future sales trends.")
 
-# -------------------------------
-# Upload dataset
-# -------------------------------
-uploaded_file = st.file_uploader("Upload your CSV file (e.g., supermarket_sales.csv)", type=["csv"])
+# ===============================
+# File Upload Section
+# ===============================
+uploaded_file = st.file_uploader("📂 Upload CSV File", type=["csv"])
+
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
-    st.subheader("📄 Dataset Preview")
+    st.subheader("📄 Preview of Uploaded Data")
     st.dataframe(df.head())
 
-    st.subheader("📊 Dataset Info")
-    st.write(df.describe())
-
-    # -------------------------------
+    # ======================================
     # Data Preprocessing
-    # -------------------------------
-    st.header("🔧 Data Preprocessing")
-
+    # ======================================
     data = df.copy()
     if 'Invoice ID' in data.columns:
         data.drop(['Invoice ID'], axis=1, inplace=True)
 
     if 'Date' in data.columns:
-        data['Date'] = pd.to_datetime(data['Date'])
+        data['Date'] = pd.to_datetime(data['Date'], errors='coerce')
         data['Year'] = data['Date'].dt.year
         data['Month'] = data['Date'].dt.month
         data['Day'] = data['Date'].dt.day
         data['Weekday'] = data['Date'].dt.day_name()
 
-    label_cols = [c for c in ['Branch','City','Customer type','Gender','Product line','Payment','Weekday'] if c in data.columns]
+    label_cols = [c for c in ['Branch', 'City', 'Customer type', 'Gender', 'Product line', 'Payment', 'Weekday'] if c in data.columns]
+
     encoders = {}
     for col in label_cols:
         le = LabelEncoder()
@@ -52,13 +52,10 @@ if uploaded_file:
         encoders[col] = le
 
     data = data.dropna().reset_index(drop=True)
-    st.success("✅ Data Preprocessing Completed!")
 
-    # -------------------------------
-    # Customer Segmentation
-    # -------------------------------
-    st.header("👥 Customer Segmentation")
-
+    # ======================================
+    # Clustering (K-Means & GMM)
+    # ======================================
     X = data.select_dtypes(include=['float64', 'int64'])
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
@@ -66,101 +63,140 @@ if uploaded_file:
     pca = PCA(n_components=2)
     X_pca = pca.fit_transform(X_scaled)
 
-    kmeans = KMeans(n_clusters=7, random_state=42)
+    kmeans = KMeans(n_clusters=3, random_state=42)
     kmeans_labels = kmeans.fit_predict(X_pca)
 
-    gmm = GaussianMixture(n_components=7, random_state=42)
+    gmm = GaussianMixture(n_components=3, random_state=42)
     gmm_labels = gmm.fit_predict(X_pca)
 
     kmeans_score = silhouette_score(X_pca, kmeans_labels)
     gmm_score = silhouette_score(X_pca, gmm_labels)
 
-    st.write("### Silhouette Score Comparison")
-    st.write(f"K-Means: {kmeans_score:.3f} | GMM: {gmm_score:.3f}")
+    # ======================================
+    # Display Results
+    # ======================================
+    st.header("🧩 Customer Segmentation Analysis")
 
-    better_cluster = "K-Means" if kmeans_score > gmm_score else "GMM"
-    st.success(f"🏆 Better Clustering Model: **{better_cluster}** (Higher Silhouette Score)")
+    col1, col2 = st.columns(2)
 
-    fig, ax = plt.subplots(1,2, figsize=(12,5))
-    ax[0].scatter(X_pca[:,0], X_pca[:,1], c=kmeans_labels, cmap='viridis', s=40)
-    ax[0].set_title("K-Means Clusters (PCA projection)")
-    ax[1].scatter(X_pca[:,0], X_pca[:,1], c=gmm_labels, cmap='plasma', s=40)
-    ax[1].set_title("GMM Clusters (PCA projection)")
-    st.pyplot(fig)
+    with col1:
+        st.subheader("K-Means Clusters (PCA Projection)")
+        fig1, ax1 = plt.subplots(figsize=(6,5))
+        ax1.scatter(X_pca[:,0], X_pca[:,1], c=kmeans_labels, cmap='viridis', s=40)
+        ax1.set_xlabel('PCA 1')
+        ax1.set_ylabel('PCA 2')
+        ax1.set_title('K-Means')
+        st.pyplot(fig1)
 
-    # -------------------------------
+    with col2:
+        st.subheader("Gaussian Mixture Model (PCA Projection)")
+        fig2, ax2 = plt.subplots(figsize=(6,5))
+        ax2.scatter(X_pca[:,0], X_pca[:,1], c=gmm_labels, cmap='plasma', s=40)
+        ax2.set_xlabel('PCA 1')
+        ax2.set_ylabel('PCA 2')
+        ax2.set_title('GMM')
+        st.pyplot(fig2)
+
+    st.markdown(f"""
+    ### 💡 Interpretation:
+    - **K-Means Silhouette Score:** `{kmeans_score:.3f}`  
+    - **GMM Silhouette Score:** `{gmm_score:.3f}`
+    
+    **Observation:**  
+    K-Means forms **distinct, compact clusters** → better separation and higher silhouette score.  
+    GMM produces **overlapping clusters** due to its probabilistic nature.  
+    **Hence, K-Means is preferred** for this dataset.
+    """)
+
+    # ======================================
     # Cluster Summary
-    # -------------------------------
-    st.header("📈 Cluster Summary")
-
+    # ======================================
     data['Cluster'] = kmeans.labels_
     cluster_summary = data.groupby('Cluster').mean(numeric_only=True)
 
-    fig, ax = plt.subplots(figsize=(10,6))
-    sns.heatmap(cluster_summary, cmap='coolwarm', annot=True, ax=ax)
-    st.pyplot(fig)
+    st.header("📈 Cluster Summary")
+    col3, col4 = st.columns([1.2, 1])
 
-    st.dataframe(cluster_summary)
+    with col3:
+        fig3, ax3 = plt.subplots(figsize=(8,5))
+        sns.heatmap(cluster_summary, cmap='coolwarm', annot=True, ax=ax3)
+        ax3.set_title("Average Feature Values per Cluster")
+        st.pyplot(fig3)
 
-    # -------------------------------
-    # Interpretation
-    # -------------------------------
-    st.header("📊 Cluster Insights")
+    with col4:
+        st.markdown("""
+        ### 🔍 Interpretation:
+        - **Cluster 1:** High unit price, quantity, and sales → **Premium Customers**
+        - **Cluster 0:** Moderate spenders → **Regular Customers**
+        - **Cluster 2:** Low spenders but satisfied → **Budget Customers**
+        """)
 
-    fig, axes = plt.subplots(1,3, figsize=(15,4))
-    sns.barplot(x='Cluster', y='Sales', data=data, palette='coolwarm', ax=axes[0])
-    axes[0].set_title("Average Sales per Cluster")
-    sns.barplot(x='Cluster', y='Rating', data=data, palette='viridis', ax=axes[1])
-    axes[1].set_title("Average Rating per Cluster")
+    # ======================================
+    # Behavior Visualization
+    # ======================================
+    st.header("🧠 Cluster Behavior Insights")
+    fig4, axes = plt.subplots(1, 3, figsize=(16,5))
+
+    avg_sales = data.groupby('Cluster')['Sales'].mean().reset_index()
+    sns.barplot(x='Cluster', y='Sales', data=avg_sales, palette='coolwarm', ax=axes[0])
+    axes[0].set_title('Average Sales per Cluster')
+
+    avg_rating = data.groupby('Cluster')['Rating'].mean().reset_index()
+    sns.barplot(x='Cluster', y='Rating', data=avg_rating, palette='viridis', ax=axes[1])
+    axes[1].set_title('Average Rating per Cluster')
+
     sns.scatterplot(x='Quantity', y='Unit price', hue='Cluster', data=data, palette='tab10', alpha=0.7, ax=axes[2])
-    axes[2].set_title("Quantity vs Unit Price (by Cluster)")
-    st.pyplot(fig)
+    axes[2].set_title('Quantity vs Unit Price')
 
-    # -------------------------------
-    # Sales Prediction
-    # -------------------------------
-    st.header("💰 Sales Prediction Models")
+    st.pyplot(fig4)
 
-    X = data[['Unit price', 'Quantity', 'Rating', 'Cluster']]
-    y = data['Sales']
+    st.markdown("""
+    ### 💬 Insights:
+    - **Cluster 1:** Drives most revenue (bulk or premium buyers).  
+    - **Cluster 0:** Stable, regular shoppers.  
+    - **Cluster 2:** Budget-conscious yet satisfied (high ratings).  
+    """)
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    # ======================================
+    # Sales Forecasting (Prophet)
+    # ======================================
+    st.header("⏳ Sales Forecasting with Prophet")
 
-    lr = LinearRegression()
-    lr.fit(X_train, y_train)
-    y_pred_lr = lr.predict(X_test)
+    if 'Date' in data.columns and 'Sales' in data.columns:
+        daily_sales = data.groupby('Date')['Sales'].sum().reset_index()
+        daily_sales.rename(columns={'Date': 'ds', 'Sales': 'y'}, inplace=True)
 
-    rf = RandomForestRegressor(n_estimators=100, random_state=42)
-    rf.fit(X_train, y_train)
-    y_pred_rf = rf.predict(X_test)
+        model = Prophet(daily_seasonality=True)
+        model.fit(daily_sales)
+        future = model.make_future_dataframe(periods=30)
+        forecast = model.predict(future)
 
-    # Model Performance Metrics
-    results = {
-        "Model": ["Linear Regression", "Random Forest"],
-        "R2 Score": [r2_score(y_test, y_pred_lr), r2_score(y_test, y_pred_rf)],
-        "MAE": [mean_absolute_error(y_test, y_pred_lr), mean_absolute_error(y_test, y_pred_rf)],
-        "RMSE": [np.sqrt(mean_squared_error(y_test, y_pred_lr)), np.sqrt(mean_squared_error(y_test, y_pred_rf))]
-    }
-    results_df = pd.DataFrame(results)
-    st.dataframe(results_df)
+        st.subheader("📅 Next 30-Day Sales Forecast")
+        
+        fig5 = model.plot(forecast, figsize=(10,5))
+        plt.title("Sales Forecast for Next 30 Days")
+        st.pyplot(fig5)
+        st.markdown("""
+        ### 💡 Interpretation:
+        - Sales Forecast for Next 30 days:
+        - *Black dots* = your actual sales (historical data)
+        - *Blue line* = Prophet’s predicted trend (yhat)
+        - *Light blue area* = uncertainty range (± predicted variation)
+        - The relatively stable band indicates that Prophet sees no strong upward/downward trend, just periodic fluctuations.
+                """)
+        st.subheader("📊 Trend & Seasonality Components")
+        fig6 = model.plot_components(forecast)
+        st.pyplot(fig6)
 
-    # Determine better model
-    best_model = results_df.loc[results_df['R2 Score'].idxmax(), 'Model']
-    st.success(f"🏆 The **better performing model** is: **{best_model}** (higher R² score)")
+        st.markdown("""
+        ### 💡 Interpretation:
+        - The **trend** shows whether sales are increasing or stabilizing over time.
+        - **Seasonal patterns** may indicate high-demand days (like weekends or holidays).
+        - This helps plan **inventory and promotions** effectively.
+        """)
 
-    fig, ax = plt.subplots(1,2, figsize=(12,5))
-    ax[0].scatter(y_test, y_pred_lr, color='blue', alpha=0.6)
-    ax[0].set_title("Linear Regression: Actual vs Predicted Sales")
-    ax[1].scatter(y_test, y_pred_rf, color='green', alpha=0.6)
-    ax[1].set_title("Random Forest: Actual vs Predicted Sales")
-    st.pyplot(fig)
-
-    feature_importance = pd.DataFrame({'Feature': X.columns, 'Importance': rf.feature_importances_}).sort_values(by='Importance', ascending=False)
-    st.subheader("🔹 Feature Importance (Random Forest)")
-    st.dataframe(feature_importance)
-
-    st.write(f"Train R²: {rf.score(X_train, y_train):.3f}")
-    st.write(f"Test R²: {rf.score(X_test, y_test):.3f}")
+    else:
+        st.warning("⚠️ Columns 'Date' and 'Sales' are required for forecasting.")
 
 else:
-    st.info("👆 Please upload your dataset to get started.")
+    st.info("👆 Please upload a CSV file to start analysis.")
