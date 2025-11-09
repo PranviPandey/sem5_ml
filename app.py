@@ -13,6 +13,8 @@ from sklearn.mixture import GaussianMixture
 from sklearn.metrics import silhouette_score
 from prophet import Prophet
 
+
+
 # Streamlit settings
 st.set_page_config(page_title="Customer Segmentation & Forecast", layout="wide")
 
@@ -75,7 +77,7 @@ if uploaded_file:
     # ======================================
     # Display Results
     # ======================================
-    st.header("🧩 Customer Segmentation Analysis")
+    st.subheader("🧩 Customer Segmentation Analysis")
 
     col1, col2 = st.columns(2)
 
@@ -100,13 +102,16 @@ if uploaded_file:
     st.markdown(f"""
     ### 💡 Interpretation:
     - **K-Means Silhouette Score:** `{kmeans_score:.3f}`  
-    - **GMM Silhouette Score:** `{gmm_score:.3f}`
-    
-    **Observation:**  
-    K-Means forms **distinct, compact clusters** → better separation and higher silhouette score.  
-    GMM produces **overlapping clusters** due to its probabilistic nature.  
-    **Hence, K-Means is preferred** for this dataset.
-    """)
+    - **GMM Silhouette Score:** `{gmm_score:.3f}`  
+
+    <div style="background-color:#d4edda; padding:15px; border-radius:10px; border-left:6px solid #28a745;">
+        <b>Observation:</b><br>
+        The <b>K-Means</b> model forms <b>clear and compact clusters</b>, showing stronger separation and a higher silhouette score.  
+        In contrast, the <b>GMM</b> model produces slightly overlapping clusters because of its probabilistic nature.  
+        <b>✅ Hence, K-Means is the preferred model for this dataset.</b>
+    </div>
+""", unsafe_allow_html=True)
+
 
     # ======================================
     # Cluster Summary
@@ -114,27 +119,42 @@ if uploaded_file:
     data['Cluster'] = kmeans.labels_
     cluster_summary = data.groupby('Cluster').mean(numeric_only=True)
 
-    st.header("📈 Cluster Summary")
+    st.subheader("📈 Cluster Summary")
     col3, col4 = st.columns([1.2, 1])
 
+    # 🎨 Left column → Heatmap
     with col3:
         fig3, ax3 = plt.subplots(figsize=(8,5))
         sns.heatmap(cluster_summary, cmap='coolwarm', annot=True, ax=ax3)
         ax3.set_title("Average Feature Values per Cluster")
         st.pyplot(fig3)
 
+    # 💬 Right column → Interpretation
     with col4:
         st.markdown("""
         ### 🔍 Interpretation:
-        - **Cluster 1:** High unit price, quantity, and sales → **Premium Customers**
-        - **Cluster 0:** Moderate spenders → **Regular Customers**
+        - **Cluster 0:** Moderate spenders → **Regular Customers**  
+        - **Cluster 1:** High unit price, quantity, and sales → **Premium Customers**  
         - **Cluster 2:** Low spenders but satisfied → **Budget Customers**
         """)
+
+    # 🧾 Display cluster summary table below
+    st.markdown("""
+    <div style="margin-top:25px; background-color:#f8f9fa; padding:10px; border-radius:10px;">
+        <h4 style="color:#333;">🧾 Cluster Summary Table</h4>
+        <p style="font-size:15px; color:#555;">Below is the detailed numerical summary for each cluster, showing average values for key metrics.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.dataframe(cluster_summary.style.background_gradient(cmap='YlGnBu').format(precision=2))
+
 
     # ======================================
     # Behavior Visualization
     # ======================================
-    st.header("🧠 Cluster Behavior Insights")
+    st.subheader("🧠 Cluster Behavior Insights")
+
+    # 🎨 Create 3 side-by-side graphs
     fig4, axes = plt.subplots(1, 3, figsize=(16,5))
 
     avg_sales = data.groupby('Cluster')['Sales'].mean().reset_index()
@@ -150,17 +170,51 @@ if uploaded_file:
 
     st.pyplot(fig4)
 
+    # 📝 Add fixed interpretation text below each graph
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown("""
+        <div style="background-color:#f8f9fa; padding:10px; border-radius:10px; border-left:5px solid #1f77b4;">
+            <b>Average Sales per Cluster:</b><br>
+Cluster 1 drives the major share of total revenue, followed by Cluster 0, while Cluster 2 contributes the least.
+Hence, Cluster 1 represents the most valuable customer group for business focus.
+</div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown("""
+        <div style="background-color:#f8f9fa; padding:10px; border-radius:10px; border-left:5px solid #2ca02c;">
+            <b>Average Rating per Cluster:</b><br>
+            All clusters show high ratings (~6.8–7.0), with only minor differences.
+Cluster 2, despite low spending, gives slightly higher ratings, showing customer satisfaction is not purely linked to high spending.
+Even low-spending customers are satisfied with their experience, which implies good overall service quality across customer groups.
+</div>
+        """, unsafe_allow_html=True)
+
+    with col3:
+        st.markdown("""
+        <div style="background-color:#f8f9fa; padding:10px; border-radius:10px; border-left:5px solid #ff7f0e;">
+            <b>Quantity vs Unit Price:</b><br>
+            Cluster 1 (orange): purchases larger quantities at higher unit prices → premium or bulk buyers.<br>
+Cluster 0 (blue): moderate quantities at average prices → regular shoppers.<br>
+Cluster 2 (green): low quantities and lower prices → budget-conscious segment.
+The scatterplot confirms that spending behavior differs significantly across clusters:
+Cluster 1 = high value, Cluster 0 = stable, Cluster 2 = low-cost.</div>
+        """, unsafe_allow_html=True)
+
+
     st.markdown("""
     ### 💬 Insights:
-    - **Cluster 1:** Drives most revenue (bulk or premium buyers).  
-    - **Cluster 0:** Stable, regular shoppers.  
+    - **Cluster 0:** Stable, regular shoppers.
+    - **Cluster 1:** Drives most revenue (bulk or premium buyers).    
     - **Cluster 2:** Budget-conscious yet satisfied (high ratings).  
     """)
 
     # ======================================
     # Sales Forecasting (Prophet)
     # ======================================
-    st.header("⏳ Sales Forecasting with Prophet")
+    st.subheader("⏳ Sales Forecasting with Prophet")
 
     if 'Date' in data.columns and 'Sales' in data.columns:
         daily_sales = data.groupby('Date')['Sales'].sum().reset_index()
@@ -171,29 +225,53 @@ if uploaded_file:
         future = model.make_future_dataframe(periods=30)
         forecast = model.predict(future)
 
-        st.subheader("📅 Next 30-Day Sales Forecast")
+        st.markdown("<h2 style='font-size:25px;'>📅 Next 30-Day Sales Forecast</h2>", unsafe_allow_html=True)
         
         fig5 = model.plot(forecast, figsize=(10,5))
         plt.title("Sales Forecast for Next 30 Days")
         st.pyplot(fig5)
         st.markdown("""
         ### 💡 Interpretation:
-        - Sales Forecast for Next 30 days:
-        - *Black dots* = your actual sales (historical data)
-        - *Blue line* = Prophet’s predicted trend (yhat)
-        - *Light blue area* = uncertainty range (± predicted variation)
-        - The relatively stable band indicates that Prophet sees no strong upward/downward trend, just periodic fluctuations.
-                """)
+        - Sales Forecast for the Next 30 Days
+
+        - The <b>black dots </b>represent actual past sales data.
+
+        - The <b>blue line </b>shows Prophet’s predicted sales trend for the coming days.
+
+        - The <b>light blue shaded area </b>illustrates the possible variation or uncertainty in those predictions.
+
+        <b>Overall, the forecast suggests steady sales with no major upward or downward trend — only small, periodic fluctuations that reflect normal business patterns.</b> """,unsafe_allow_html=True)
         st.subheader("📊 Trend & Seasonality Components")
+
+        # Generate Prophet component plots
         fig6 = model.plot_components(forecast)
+
+        # Display all Prophet component plots
         st.pyplot(fig6)
 
+        # 🧭 Add clear, humanized explanations for each Prophet component
         st.markdown("""
-        ### 💡 Interpretation:
-        - The **trend** shows whether sales are increasing or stabilizing over time.
-        - **Seasonal patterns** may indicate high-demand days (like weekends or holidays).
-        - This helps plan **inventory and promotions** effectively.
+        ### 🪜 **Overall Trend**
+        The **trend line** shows how total sales have evolved over time.  
+        You can see gradual rises or dips representing long-term business movement.  
+        A **stable trend** means consistent sales without strong growth or decline.
+
+        ---
+
+        ### 📅 **Weekly Seasonality**
+        This part shows how sales vary by day of the week.  
+        For example, **weekends might show higher sales** if customers shop more, while weekdays could be steady or slower.  
+        It helps identify **which days consistently perform best**.
+
+        ---
+
+        ### 🌤️ **Daily / Monthly Seasonality**
+        This component captures **short-term repeating patterns**, like monthly cycles or daily demand changes.  
+        If you notice repeating peaks and troughs, it indicates **periodic behavior** — for instance, **higher sales near month-end or festivals**.
+
+        ---
         """)
+
 
     else:
         st.warning("⚠️ Columns 'Date' and 'Sales' are required for forecasting.")
